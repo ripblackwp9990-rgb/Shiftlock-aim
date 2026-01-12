@@ -1,82 +1,120 @@
---// SERVIÇOS
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local UserGameSettings = UserSettings():GetService("UserGameSettings")
-
-local player = Players.LocalPlayer
-local camera = workspace.CurrentCamera
-
---// PERSONAGEM
-local character = player.Character or player.CharacterAdded:Wait()
-local humanoid = character:WaitForChild("Humanoid")
-local hrp = character:WaitForChild("HumanoidRootPart")
-
---// BOTÃO
-local button = script.Parent
-button.Font = Enum.Font.GothamBold
-button.TextSize = 14
-button.TextColor3 = Color3.new(1,1,1)
-
---// ESTADOS
--- 1 = OFF
--- 2 = LOCK
--- 3 = AIM
-local state = 1
-
-_G.MobileShiftlock = false
-local offset = CFrame.new(1.75, 0, 0)
-
---// FUNÇÃO TEXTO
-local function updateText()
-	if state == 1 then
-		button.Text = "Shiftlock (OFF)"
-		button.BackgroundColor3 = Color3.fromRGB(80,80,80)
-	elseif state == 2 then
-		button.Text = "Shiftlock (LOCK)"
-		button.BackgroundColor3 = Color3.fromRGB(0,170,0)
-	elseif state == 3 then
-		button.Text = "Shiftlock (AIM)"
-		button.BackgroundColor3 = Color3.fromRGB(170,0,170)
-	end
+local Settings = UserSettings()
+local GameSettings = Settings.GameSettings
+local ShiftLockController = {}
+while not Players.LocalPlayer do
+    wait()
 end
-
-updateText()
-
---// CLICK
-button.MouseButton1Click:Connect(function()
-	state += 1
-	if state > 3 then
-		state = 1
-	end
-	updateText()
-end)
-
---// LOOP
-RunService.RenderStepped:Connect(function()
-	if state == 1 then
-		-- OFF
-		_G.MobileShiftlock = false
-		UserGameSettings.RotationType = Enum.RotationType.MovementRelative
-		humanoid.AutoRotate = true
-
-	elseif state == 2 then
-		-- LOCK (Shiftlock normal)
-		_G.MobileShiftlock = true
-		UserGameSettings.RotationType = Enum.RotationType.CameraRelative
-		humanoid.AutoRotate = false
-		camera.CFrame = camera.CFrame * offset
-
-	elseif state == 3 then
-		-- AIM (Shiftlock de mira)
-		_G.MobileShiftlock = true
-		UserGameSettings.RotationType = Enum.RotationType.CameraRelative
-		humanoid.AutoRotate = false
-
-		-- trava câmera reta
-		camera.CFrame = CFrame.new(
-			camera.CFrame.Position,
-			camera.CFrame.Position + camera.CFrame.LookVector
-		)
-	end
-end)
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local ScreenGui, ShiftLockIcon, InputCn
+local IsShiftLockMode = true
+local IsShiftLocked = true
+local IsActionBound = false
+local IsInFirstPerson = false
+ShiftLockController.OnShiftLockToggled = Instance.new("BindableEvent")
+local function isShiftLockMode()
+    return LocalPlayer.DevEnableMouseLock and GameSettings.ControlMode == Enum.ControlMode.MouseLockSwitch and LocalPlayer.DevComputerMovementMode ~= Enum.DevComputerMovementMode.ClickToMove and GameSettings.ComputerMovementMode ~= Enum.ComputerMovementMode.ClickToMove and LocalPlayer.DevComputerMovementMode ~= Enum.DevComputerMovementMode.Scriptable
+end
+if not UserInputService.TouchEnabled then
+    IsShiftLockMode = isShiftLockMode()
+end
+local function onShiftLockToggled()
+    IsShiftLocked = not IsShiftLocked
+    ShiftLockController.OnShiftLockToggled:Fire()
+end
+local initialize = function()
+    print("enabled")
+end
+function ShiftLockController:IsShiftLocked()
+    return IsShiftLockMode and IsShiftLocked
+end
+function ShiftLockController:SetIsInFirstPerson(isInFirstPerson)
+    IsInFirstPerson = isInFirstPerson
+end
+local function mouseLockSwitchFunc(actionName, inputState, inputObject)
+    if IsShiftLockMode then
+        onShiftLockToggled()
+    end
+end
+local function disableShiftLock()
+    if ScreenGui then
+        ScreenGui.Parent = nil
+    end
+    IsShiftLockMode = false
+    Mouse.Icon = ""
+    if InputCn then
+        InputCn:disconnect()
+        InputCn = nil
+    end
+    IsActionBound = false
+    ShiftLockController.OnShiftLockToggled:Fire()
+end
+local onShiftInputBegan = function(inputObject, isProcessed)
+    if isProcessed then
+        return
+    end
+    if inputObject.UserInputType ~= Enum.UserInputType.Keyboard or inputObject.KeyCode == Enum.KeyCode.LeftShift or inputObject.KeyCode == Enum.KeyCode.RightShift then
+    end
+    end
+        local function enableShiftLock()
+            IsShiftLockMode = isShiftLockMode()
+            if IsShiftLockMode then
+                if ScreenGui then
+                    ScreenGui.Parent = PlayerGui
+                end
+                if IsShiftLocked then
+                    ShiftLockController.OnShiftLockToggled:Fire()
+                end
+                if not IsActionBound then
+                    InputCn = UserInputService.InputBegan:connect(onShiftInputBegan)
+                    IsActionBound = true
+                end
+            end
+        end
+        GameSettings.Changed:connect(function(property)
+            if property == "ControlMode" then
+                if GameSettings.ControlMode == Enum.ControlMode.MouseLockSwitch then
+                    enableShiftLock()
+                else
+                    disableShiftLock()
+                end
+            elseif property == "ComputerMovementMode" then
+                if GameSettings.ComputerMovementMode == Enum.ComputerMovementMode.ClickToMove then
+                    disableShiftLock()
+                else
+                    enableShiftLock()
+                end
+            end
+        end)
+        LocalPlayer.Changed:connect(function(property)
+            if property == "DevEnableMouseLock" then
+                if LocalPlayer.DevEnableMouseLock then
+                    enableShiftLock()
+                else
+                    disableShiftLock()
+                end
+            elseif property == "DevComputerMovementMode" then
+                if LocalPlayer.DevComputerMovementMode == Enum.DevComputerMovementMode.ClickToMove or LocalPlayer.DevComputerMovementMode == Enum.DevComputerMovementMode.Scriptable then
+                    disableShiftLock()
+                else
+                    enableShiftLock()
+                end
+            end
+        end)
+        LocalPlayer.CharacterAdded:connect(function(character)
+            if not UserInputService.TouchEnabled then
+                initialize()
+            end
+        end)
+        if not UserInputService.TouchEnabled then
+            initialize()
+            if isShiftLockMode() then
+                InputCn = UserInputService.InputBegan:connect(onShiftInputBegan)
+                IsActionBound = true
+            end
+        end
+        enableShiftLock()
+        return ShiftLockController
